@@ -96,14 +96,14 @@ func ListenTCP(ctx context.Context, address net.Address, port net.Port, streamSe
 			errors.LogInfo(ctx, "transport/internet/tcp: branch A — SecurityType contains whitewolf, SecuritySettings is *whitewolf.Config -> useWhitewolfServer=true")
 		} else if rc, ok := streamSettings.SecuritySettings.(*reality.Config); ok {
 			wc = whitewolf.ConfigFromReality(rc)
-			errors.LogInfo(ctx, "transport/internet/tcp: branch A — SecurityType contains whitewolf, SecuritySettings is *reality.Config -> converted to whitewolf, useWhitewolfServer=true")
+			errors.LogInfo(ctx, "transport/internet/tcp: branch A — SecurityType contains whitewolf, SecuritySettings converted to whitewolf -> useWhitewolfServer=true")
 		}
 		if wc != nil {
 			l.realityConfig = wc.GetREALITYConfig()
 			l.useWhitewolfServer = true
 			go goreality.DetectPostHandshakeRecordsLens(l.realityConfig)
 		} else {
-			errors.LogInfo(ctx, "transport/internet/tcp: branch A — SecurityType contains whitewolf but type assert failed for *whitewolf.Config and *reality.Config, wc=nil")
+			errors.LogInfo(ctx, "transport/internet/tcp: branch A — SecurityType contains whitewolf but type assert failed for config, wc=nil")
 		}
 	}
 	// If we have reality config but SecurityType was not recognized as whitewolf, still prefer whitewolf when SecuritySettings is *whitewolf.Config.
@@ -125,20 +125,24 @@ func ListenTCP(ctx context.Context, address net.Address, port net.Port, streamSe
 			l.realityConfig = config.GetREALITYConfig()
 			// If SecurityType says whitewolf, inbound proxy is whitewolf, or inbound tag contains "whitewolf", use whitewolf server (AcceptAll).
 			useWhitewolf := streamSettings != nil && (strings.Contains(strings.ToLower(streamSettings.SecurityType), "whitewolf") || streamSettings.InboundIsWhitewolf || strings.Contains(strings.ToLower(streamSettings.InboundTag), "whitewolf"))
-			errors.LogInfo(ctx, "transport/internet/tcp: branch D — reality.ConfigFromStreamSettings used; SecurityType=", streamSettings.SecurityType, " InboundTag=", streamSettings.InboundTag, " InboundIsWhitewolf=", streamSettings.InboundIsWhitewolf, " -> useWhitewolf=", useWhitewolf)
+			errors.LogInfo(ctx, "transport/internet/tcp: branch D — ConfigFromStreamSettings; SecurityType=", streamSettings.SecurityType, " InboundTag=", streamSettings.InboundTag, " InboundIsWhitewolf=", streamSettings.InboundIsWhitewolf, " -> useWhitewolf=", useWhitewolf)
 			if useWhitewolf {
 				wc := whitewolf.ConfigFromReality(config)
 				l.realityConfig = wc.GetREALITYConfig()
 				l.useWhitewolfServer = true
 				errors.LogInfo(ctx, "transport/internet/tcp: branch D — useWhitewolf true -> using AcceptAll server")
 			} else {
-				errors.LogInfo(ctx, "transport/internet/tcp: branch D — useWhitewolf false -> using REALITY server (SessionId check)")
+				errors.LogInfo(ctx, "transport/internet/tcp: branch D — useWhitewolf false -> using TLS server (SessionId check)")
 			}
 			go goreality.DetectPostHandshakeRecordsLens(l.realityConfig)
 		}
 	}
 
-	errors.LogInfo(ctx, "transport/internet/tcp: listener final useWhitewolfServer=", l.useWhitewolfServer, " hasRealityConfig=", l.realityConfig != nil)
+	if l.useWhitewolfServer {
+		errors.LogInfo(ctx, "transport/internet/tcp: listener final useWhitewolfServer=true")
+	} else {
+		errors.LogInfo(ctx, "transport/internet/tcp: listener final useWhitewolfServer=false hasRealityConfig=", l.realityConfig != nil)
+	}
 
 	if tcpSettings.HeaderSettings != nil {
 		headerConfig, err := tcpSettings.HeaderSettings.GetInstance()
@@ -181,7 +185,7 @@ func (v *Listener) keepAccepting() {
 						return
 					}
 				} else {
-					errors.LogInfo(context.Background(), "transport/internet/tcp: accept — using reality.Server (SessionId) for ", conn.RemoteAddr())
+					errors.LogInfo(context.Background(), "transport/internet/tcp: accept — using TLS server (SessionId) for ", conn.RemoteAddr())
 					if conn, err = reality.Server(conn, v.realityConfig); err != nil {
 						errors.LogInfo(context.Background(), err.Error())
 						return

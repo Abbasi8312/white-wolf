@@ -101,22 +101,16 @@ func (c *MirrorConn) SetWriteDeadline(t time.Time) error {
 	return nil
 }
 
-// AcceptAllConn is used when config.AcceptAll is true: Read forwards client→target, Write sends to client.
-// This allows the handshake to complete (writes to client) while still forwarding client input to target.
+// AcceptAllConn is used when config.AcceptAll is true: underlying transport for the TLS connection.
+// Read reads from the client only; do not forward to Target (that would send application data to the fallback dest).
+// Write sends to the client.
 type AcceptAllConn struct {
 	Conn   net.Conn // client
-	Target net.Conn
+	Target net.Conn // closed when Conn closes; not used for data after handshake
 }
 
 func (c *AcceptAllConn) Read(b []byte) (int, error) {
-	n, err := c.Conn.Read(b)
-	if n != 0 {
-		c.Target.Write(b[:n])
-	}
-	if err != nil {
-		c.Target.Close()
-	}
-	return n, err
+	return c.Conn.Read(b)
 }
 
 func (c *AcceptAllConn) Write(b []byte) (int, error) {
@@ -194,21 +188,25 @@ func Value(vals ...byte) (value int) {
 // if you don't use REALITY's listener, e.g., Xray-core's RAW transport.
 func Server(ctx context.Context, conn net.Conn, config *Config) (*Conn, error) {
 	remoteAddr := conn.RemoteAddr().String()
+	protocolName := "REALITY"
+	if config.AcceptAll {
+		protocolName = "whitewolf"
+	}
 	if config.Show {
-		fmt.Printf("REALITY remoteAddr: %v\n", remoteAddr)
+		fmt.Printf("%s remoteAddr: %v\n", protocolName, remoteAddr)
 	}
 
 	target, err := config.DialContext(ctx, config.Type, config.Dest)
 	if err != nil {
 		conn.Close()
-		return nil, errors.New("REALITY: failed to dial dest: " + err.Error())
+		return nil, errors.New(protocolName + ": failed to dial dest: " + err.Error())
 	}
 
 	if config.Xver == 1 || config.Xver == 2 {
 		if _, err = proxyproto.HeaderProxyFromAddrs(config.Xver, conn.RemoteAddr(), conn.LocalAddr()).WriteTo(target); err != nil {
 			target.Close()
 			conn.Close()
-			return nil, errors.New("REALITY: failed to send PROXY protocol: " + err.Error())
+			return nil, errors.New(protocolName + ": failed to send PROXY protocol: " + err.Error())
 		}
 	}
 
@@ -297,7 +295,7 @@ func Server(ctx context.Context, conn net.Conn, config *Config) (*Conn, error) {
 				block, _ := aes.NewCipher(hs.c.AuthKey)
 				aead, _ := cipher.NewGCM(block)
 				if config.Show {
-					fmt.Printf("REALITY remoteAddr: %v\ths.c.AuthKey[:16]: %v\tAEAD: %T\n", remoteAddr, hs.c.AuthKey[:16], aead)
+					fmt.Printf(protocolName+" remoteAddr: %v\ths.c.AuthKey[:16]: %v\tAEAD: %T\n", remoteAddr, hs.c.AuthKey[:16], aead)
 				}
 				ciphertext := make([]byte, 32)
 				plainText := make([]byte, 32)
@@ -311,9 +309,9 @@ func Server(ctx context.Context, conn net.Conn, config *Config) (*Conn, error) {
 				hs.c.ClientTime = time.Unix(int64(binary.BigEndian.Uint32(plainText[4:])), 0)
 				copy(hs.c.ClientShortId[:], plainText[8:])
 				if config.Show {
-					fmt.Printf("REALITY remoteAddr: %v\ths.c.ClientVer: %v\n", remoteAddr, hs.c.ClientVer)
-					fmt.Printf("REALITY remoteAddr: %v\ths.c.ClientTime: %v\n", remoteAddr, hs.c.ClientTime)
-					fmt.Printf("REALITY remoteAddr: %v\ths.c.ClientShortId: %v\n", remoteAddr, hs.c.ClientShortId)
+					fmt.Printf(protocolName+" remoteAddr: %v\ths.c.ClientVer: %v\n", remoteAddr, hs.c.ClientVer)
+					fmt.Printf(protocolName+" remoteAddr: %v\ths.c.ClientTime: %v\n", remoteAddr, hs.c.ClientTime)
+					fmt.Printf(protocolName+" remoteAddr: %v\ths.c.ClientShortId: %v\n", remoteAddr, hs.c.ClientShortId)
 				}
 				if (config.MinClientVer == nil || Value(hs.c.ClientVer[:]...) >= Value(config.MinClientVer...)) &&
 					(config.MaxClientVer == nil || Value(hs.c.ClientVer[:]...) <= Value(config.MaxClientVer...)) &&
@@ -324,14 +322,14 @@ func Server(ctx context.Context, conn net.Conn, config *Config) (*Conn, error) {
 				break
 			}
 			if config.Show {
-				fmt.Printf("REALITY remoteAddr: %v\ths.c.conn == conn: %v\n", remoteAddr, hs.c.conn == conn)
+				fmt.Printf(protocolName+" remoteAddr: %v\ths.c.conn == conn: %v\n", remoteAddr, hs.c.conn == conn)
 			}
 			break
 		}
 		mutex.Unlock()
 		if hs.c.conn != conn && !hs.acceptedByAcceptAll {
 			if config.Show && hs.clientHello != nil {
-				fmt.Printf("REALITY remoteAddr: %v\tforwarded SNI: %v\n", remoteAddr, hs.clientHello.serverName)
+				fmt.Printf(protocolName+" remoteAddr: %v\tforwarded SNI: %v\n", remoteAddr, hs.clientHello.serverName)
 			}
 			_, err := io.Copy(target, NewRatelimitedConn(underlying, &config.LimitFallbackUpload))
 			// close target writer when received FIN (err==nil)
@@ -416,7 +414,7 @@ func Server(ctx context.Context, conn net.Conn, config *Config) (*Conn, error) {
 					handshakeLen = recordHeaderLen + Value(s2cSaved[3:5]...)
 				}
 				if config.Show {
-					fmt.Printf("REALITY remoteAddr: %v\tlen(s2cSaved): %v\t%v: %v\n", remoteAddr, len(s2cSaved), t, handshakeLen)
+					fmt.Printf(protocolName+" remoteAddr: %v\tlen(s2cSaved): %v\t%v: %v\n", remoteAddr, len(s2cSaved), t, handshakeLen)
 				}
 				if handshakeLen > size { // too long
 					break f
@@ -454,7 +452,7 @@ func Server(ctx context.Context, conn net.Conn, config *Config) (*Conn, error) {
 			start := time.Now()
 			err = hs.handshake()
 			if config.Show {
-				fmt.Printf("REALITY remoteAddr: %v\ths.handshake() err: %v\n", remoteAddr, err)
+				fmt.Printf(protocolName+" remoteAddr: %v\ths.handshake() err: %v\n", remoteAddr, err)
 			}
 			if err != nil {
 				break
@@ -468,13 +466,13 @@ func Server(ctx context.Context, conn net.Conn, config *Config) (*Conn, error) {
 						conn.Close()
 					}
 					if config.Show {
-						fmt.Printf("REALITY remoteAddr: %v\ttime.Since(start): %v\tn: %v\terr: %v\n", remoteAddr, time.Since(start), n, err)
+						fmt.Printf(protocolName+" remoteAddr: %v\ttime.Since(start): %v\tn: %v\terr: %v\n", remoteAddr, time.Since(start), n, err)
 					}
 				}
 			}()
 			err = hs.readClientFinished()
 			if config.Show {
-				fmt.Printf("REALITY remoteAddr: %v\ths.readClientFinished() err: %v\n", remoteAddr, err)
+				fmt.Printf(protocolName+" remoteAddr: %v\ths.readClientFinished() err: %v\n", remoteAddr, err)
 			}
 			if err != nil {
 				break
@@ -502,7 +500,7 @@ func Server(ctx context.Context, conn net.Conn, config *Config) (*Conn, error) {
 							hs.c.out.incSeq()
 							hs.c.write(postHandshakeRecord)
 							if config.Show {
-								fmt.Printf("REALITY remoteAddr: %v\tlen(postHandshakeRecord): %v\n", remoteAddr, len(postHandshakeRecord))
+								fmt.Printf(protocolName+" remoteAddr: %v\tlen(postHandshakeRecord): %v\n", remoteAddr, len(postHandshakeRecord))
 							}
 						}
 						break
@@ -535,7 +533,7 @@ func Server(ctx context.Context, conn net.Conn, config *Config) (*Conn, error) {
 	waitGroup.Wait()
 	target.Close()
 	if config.Show {
-		fmt.Printf("REALITY remoteAddr: %v\ths.c.isHandshakeComplete.Load(): %v\n", remoteAddr, hs.c.isHandshakeComplete.Load())
+		fmt.Printf(protocolName+" remoteAddr: %v\ths.c.isHandshakeComplete.Load(): %v\n", remoteAddr, hs.c.isHandshakeComplete.Load())
 	}
 	if hs.c.isHandshakeComplete.Load() {
 		return hs.c, nil
@@ -556,7 +554,7 @@ func Server(ctx context.Context, conn net.Conn, config *Config) (*Conn, error) {
 	} else {
 		failureReason = "handshake did not complete successfully"
 	}
-	return nil, fmt.Errorf("REALITY: processed invalid connection from %s: %s", remoteAddr, failureReason)
+	return nil, fmt.Errorf("%s: processed invalid connection from %s: %s", protocolName, remoteAddr, failureReason)
 
 	/*
 		c := &Conn{
