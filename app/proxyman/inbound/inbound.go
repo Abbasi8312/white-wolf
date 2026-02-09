@@ -16,10 +16,10 @@ import (
 
 // Manager manages all inbound handlers.
 type Manager struct {
-	access          sync.RWMutex
+	access           sync.RWMutex
 	untaggedHandlers []inbound.Handler
-	taggedHandlers  map[string]inbound.Handler
-	running         bool
+	taggedHandlers   map[string]inbound.Handler
+	running          bool
 }
 
 // New returns a new Manager for inbound handlers.
@@ -178,7 +178,11 @@ func NewHandler(ctx context.Context, config *core.InboundHandlerConfig) (inbound
 		ctx = session.ContextWithAllowedNetwork(ctx, net.Network_UDP)
 	}
 
-	return NewAlwaysOnInboundHandler(ctx, tag, receiverSettings, proxySettings)
+	proxyType := ""
+	if config.ProxySettings != nil {
+		proxyType = config.ProxySettings.Type
+	}
+	return NewAlwaysOnInboundHandler(ctx, tag, receiverSettings, proxySettings, proxyType)
 }
 
 func init() {

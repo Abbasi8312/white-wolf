@@ -32,6 +32,7 @@ var (
 		"vless":         func() interface{} { return new(VLessInboundConfig) },
 		"vmess":         func() interface{} { return new(VMessInboundConfig) },
 		"trojan":        func() interface{} { return new(TrojanServerConfig) },
+		"whitewolf":     func() interface{} { return new(WhitewolfInboundConfig) },
 		"wireguard":     func() interface{} { return &WireGuardConfig{IsClient: false} },
 		"tun":           func() interface{} { return new(TunConfig) },
 	}, "protocol", "settings")
@@ -48,6 +49,7 @@ var (
 		"vless":       func() interface{} { return new(VLessOutboundConfig) },
 		"vmess":       func() interface{} { return new(VMessOutboundConfig) },
 		"trojan":      func() interface{} { return new(TrojanClientConfig) },
+		"whitewolf":   func() interface{} { return new(WhitewolfClientConfig) },
 		"hysteria":    func() interface{} { return new(HysteriaClientConfig) },
 		"dns":         func() interface{} { return new(DNSOutboundConfig) },
 		"wireguard":   func() interface{} { return &WireGuardConfig{IsClient: true} },

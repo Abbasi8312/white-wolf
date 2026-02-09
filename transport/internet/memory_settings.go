@@ -7,15 +7,17 @@ import (
 
 // MemoryStreamConfig is a parsed form of StreamConfig. It is used to reduce the number of Protobuf parses.
 type MemoryStreamConfig struct {
-	Destination      *net.Destination
-	ProtocolName     string
-	ProtocolSettings interface{}
-	SecurityType     string
-	SecuritySettings interface{}
-	TcpmaskManager   *finalmask.TcpmaskManager
-	UdpmaskManager   *finalmask.UdpmaskManager
-	SocketSettings   *SocketConfig
-	DownloadSettings *MemoryStreamConfig
+	Destination        *net.Destination
+	ProtocolName       string
+	ProtocolSettings   interface{}
+	SecurityType       string
+	SecuritySettings   interface{}
+	TcpmaskManager     *finalmask.TcpmaskManager
+	UdpmaskManager     *finalmask.UdpmaskManager
+	SocketSettings     *SocketConfig
+	DownloadSettings   *MemoryStreamConfig
+	InboundIsWhitewolf bool   // set by inbound handler when proxy protocol is whitewolf so TCP hub uses AcceptAll server
+	InboundTag         string // set by inbound handler; hub may use it to choose whitewolf server when tag contains "whitewolf"
 }
 
 // ToMemoryStreamConfig converts a StreamConfig to MemoryStreamConfig. It returns a default non-nil MemoryStreamConfig for nil input.

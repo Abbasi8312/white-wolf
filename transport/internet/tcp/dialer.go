@@ -14,6 +14,7 @@ import (
 	"github.com/xtls/xray-core/transport/internet/reality"
 	"github.com/xtls/xray-core/transport/internet/stat"
 	"github.com/xtls/xray-core/transport/internet/tls"
+	"github.com/xtls/xray-core/transport/internet/whitewolf"
 )
 
 // Dial dials a new TCP connection to the given destination.
@@ -88,6 +89,14 @@ func Dial(ctx context.Context, dest net.Destination, streamSettings *internet.Me
 		}
 	} else if config := reality.ConfigFromStreamSettings(streamSettings); config != nil {
 		if conn, err = reality.UClient(conn, config, ctx, dest); err != nil {
+			return nil, err
+		}
+	} else if wConfig := whitewolf.ConfigFromStreamSettings(streamSettings); wConfig != nil {
+		rConfig := whitewolf.ConfigToReality(wConfig)
+		if rConfig.GetFingerprint() == "" {
+			rConfig.Fingerprint = "firefox"
+		}
+		if conn, err = reality.UClient(conn, rConfig, ctx, dest); err != nil {
 			return nil, err
 		}
 	}

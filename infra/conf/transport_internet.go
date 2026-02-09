@@ -37,6 +37,7 @@ import (
 	"github.com/xtls/xray-core/transport/internet/tcp"
 	"github.com/xtls/xray-core/transport/internet/tls"
 	"github.com/xtls/xray-core/transport/internet/websocket"
+	"github.com/xtls/xray-core/transport/internet/whitewolf"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -1394,6 +1395,7 @@ type StreamConfig struct {
 	FinalMask           *FinalMask         `json:"finalmask"`
 	TLSSettings         *TLSConfig         `json:"tlsSettings"`
 	REALITYSettings     *REALITYConfig     `json:"realitySettings"`
+	WhitewolfSettings   *REALITYConfig     `json:"whitewolfSettings"`
 	RAWSettings         *TCPConfig         `json:"rawSettings"`
 	TCPSettings         *TCPConfig         `json:"tcpSettings"`
 	XHTTPSettings       *SplitHTTPConfig   `json:"xhttpSettings"`
@@ -1449,6 +1451,25 @@ func (c *StreamConfig) Build() (*internet.StreamConfig, error) {
 			return nil, errors.New("Failed to build REALITY config.").Base(err)
 		}
 		tm := serial.ToTypedMessage(ts)
+		config.SecuritySettings = append(config.SecuritySettings, tm)
+		config.SecurityType = tm.Type
+	case "whitewolf":
+		if config.ProtocolName != "tcp" && config.ProtocolName != "splithttp" && config.ProtocolName != "grpc" {
+			return nil, errors.New("Whitewolf only supports RAW, XHTTP and gRPC for now.")
+		}
+		if c.WhitewolfSettings == nil {
+			return nil, errors.New(`Whitewolf: Empty "whitewolfSettings".`)
+		}
+		ts, err := c.WhitewolfSettings.Build()
+		if err != nil {
+			return nil, errors.New("Failed to build Whitewolf config.").Base(err)
+		}
+		rc, ok := ts.(*reality.Config)
+		if !ok {
+			return nil, errors.New("Whitewolf: invalid config type.")
+		}
+		wc := whitewolf.ConfigFromReality(rc)
+		tm := serial.ToTypedMessage(wc)
 		config.SecuritySettings = append(config.SecuritySettings, tm)
 		config.SecurityType = tm.Type
 	case "xtls":

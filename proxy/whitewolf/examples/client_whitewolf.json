@@ -1,0 +1,33 @@
+{
+  "log": { "loglevel": "debug" },
+  "inbounds": [{
+    "tag": "in",
+    "listen": "127.0.0.1",
+    "port": 12345,
+    "protocol": "socks",
+    "settings": { "udp": true }
+  }],
+  "outbounds": [{
+    "tag": "whitewolf-out",
+    "protocol": "whitewolf",
+    "settings": {
+      "address": "127.0.0.1",
+      "port": 444,
+      "symmetricKey": "73fdBlCkHhWgCHEcSHy7_D24p35wCfewFFNJFES67Bw"
+    },
+    "streamSettings": {
+      "network": "tcp",
+      "security": "whitewolf",
+      "whitewolfSettings": {
+        "serverName": "google.com",
+        "fingerprint": "firefox",
+        "publicKey": "D5bypeAg0VXzxWiLqw0saAdSXOAeF34mrkaNdneOoWs",
+        "shortId": "f8951ea031cf12eb"
+      }
+    }
+  }],
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [{ "type": "field", "outboundTag": "whitewolf-out", "network": "tcp,udp" }]
+  }
+}

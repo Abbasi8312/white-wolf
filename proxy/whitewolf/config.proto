@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package xray.proxy.whitewolf;
+option csharp_namespace = "Xray.Proxy.Whitewolf";
+option go_package = "github.com/xtls/xray-core/proxy/whitewolf";
+option java_package = "com.xray.proxy.whitewolf";
+option java_multiple_files = true;
+
+import "common/protocol/server_spec.proto";
+
+message Account {
+  bytes symmetric_key = 1;
+}
+
+message ServerConfig {
+  bytes symmetric_key = 1;
+  string fallback_dest = 2;
+}
+
+message ClientConfig {
+  xray.common.protocol.ServerEndpoint server = 1;
+}

@@ -2,6 +2,7 @@ package inbound
 
 import (
 	"context"
+	"strings"
 
 	"github.com/xtls/xray-core/app/proxyman"
 	"github.com/xtls/xray-core/common"
@@ -15,6 +16,7 @@ import (
 	"github.com/xtls/xray-core/features/stats"
 	"github.com/xtls/xray-core/proxy"
 	"github.com/xtls/xray-core/transport/internet"
+	_ "github.com/xtls/xray-core/transport/internet/whitewolf" // ensure whitewolf config type is registered before ToMemoryStreamConfig
 	"google.golang.org/protobuf/proto"
 )
 
@@ -52,7 +54,7 @@ type AlwaysOnInboundHandler struct {
 	tag            string
 }
 
-func NewAlwaysOnInboundHandler(ctx context.Context, tag string, receiverConfig *proxyman.ReceiverConfig, proxyConfig interface{}) (*AlwaysOnInboundHandler, error) {
+func NewAlwaysOnInboundHandler(ctx context.Context, tag string, receiverConfig *proxyman.ReceiverConfig, proxyConfig interface{}, proxyType string) (*AlwaysOnInboundHandler, error) {
 	// Set tag and sniffing config in context before creating proxy
 	// This allows proxies like TUN to access these settings
 	ctx = session.ContextWithInbound(ctx, &session.Inbound{Tag: tag})
@@ -96,6 +98,11 @@ func NewAlwaysOnInboundHandler(ctx context.Context, tag string, receiverConfig *
 	mss, err := internet.ToMemoryStreamConfig(receiverConfig.StreamSettings)
 	if err != nil {
 		return nil, errors.New("failed to parse stream config").Base(err).AtWarning()
+	}
+	mss.InboundIsWhitewolf = strings.Contains(strings.ToLower(proxyType), "whitewolf")
+	mss.InboundTag = tag
+	if strings.Contains(strings.ToLower(tag), "whitewolf") {
+		errors.LogInfo(ctx, "app/proxyman/inbound: whitewolf inbound tag=", tag, " -> InboundTag set on stream config")
 	}
 
 	if receiverConfig.ReceiveOriginalDestination {

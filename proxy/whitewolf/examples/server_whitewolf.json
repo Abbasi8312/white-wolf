@@ -1,0 +1,29 @@
+{
+  "log": { "loglevel": "debug" },
+  "inbounds": [{
+    "tag": "whitewolf-in",
+    "listen": "0.0.0.0",
+    "port": 444,
+    "protocol": "whitewolf",
+    "settings": {
+      "symmetricKey": "73fdBlCkHhWgCHEcSHy7_D24p35wCfewFFNJFES67Bw",
+      "fallbackDest": "tcp:google.com:443"
+    },
+    "streamSettings": {
+      "network": "tcp",
+      "security": "whitewolf",
+      "whitewolfSettings": {
+        "dest": "google.com:443",
+        "serverNames": ["google.com"],
+        "privateKey": "-Kty0DdYPPa0PMK4L3QqGGTbOtfxEh7IrQL5MvvRHVM",
+        "shortIds": ["f8951ea031cf12eb"]
+      }
+    },
+    "sniffing": { "enabled": true }
+  }],
+  "outbounds": [
+    { "tag": "direct", "protocol": "freedom" }
+  ],
+  "routing": {
+  }
+}
