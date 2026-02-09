@@ -354,6 +354,32 @@ func Server(ctx context.Context, conn net.Conn, config *Config) (*Conn, error) {
 		handshakeLen := 0
 	f:
 		for {
+			mutex.Lock()
+			if hs.acceptedByAcceptAll {
+				mutex.Unlock()
+				if err := hs.processClientHello(); err != nil {
+					waitGroup.Done()
+					return
+				}
+				orig, err := hs.hello.marshal()
+				if err != nil {
+					waitGroup.Done()
+					return
+				}
+				hs.hello.original = orig
+				if err := hs.handshake(); err != nil {
+					waitGroup.Done()
+					return
+				}
+				if err := hs.readClientFinished(); err != nil {
+					waitGroup.Done()
+					return
+				}
+				hs.c.isHandshakeComplete.Store(true)
+				waitGroup.Done()
+				return
+			}
+			mutex.Unlock()
 			runtime.Gosched()
 			n, err := target.Read(buf)
 			if n == 0 {
